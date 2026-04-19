@@ -24,7 +24,7 @@ const swaggerDocument = {
   info: {
     title: 'Banking API – Devoir 304',
     version: '1.0.0',
-    description: 'API bancaire : créer des comptes, dépôts et retraits',
+    description: 'API bancaire développée par Tassolimo Zita : gérer des comptes et transactions',
   },
   paths: {
     '/api/accounts': {
@@ -39,8 +39,8 @@ const swaggerDocument = {
                 type: 'object',
                 required: ['owner', 'type'],
                 properties: {
-                  owner: { type: 'string', example: 'Jean Dupont' },
-                  email: { type: 'string', example: 'jean@example.com' },
+                  owner: { type: 'string', example: 'Tassolimo Zita' },
+                  email: { type: 'string', example: 'tassolimofabiola@gmail.com' },
                   type: { type: 'string', enum: ['courant', 'epargne'] },
                   initialDeposit: { type: 'number', example: 50000 },
                 },
@@ -75,7 +75,7 @@ const swaggerDocument = {
                 required: ['amount'],
                 properties: {
                   amount: { type: 'number', example: 10000 },
-                  description: { type: 'string', example: 'Salaire' },
+                  description: { type: 'string', example: 'Dépôt initial' },
                 },
               },
             },
@@ -83,7 +83,7 @@ const swaggerDocument = {
         },
         responses: {
           200: { description: 'Dépôt effectué' },
-          400: { description: 'Données invalides' },
+          400: { description: 'Montant invalide' },
           404: { description: 'Compte non trouvé' },
         },
       },
@@ -102,7 +102,7 @@ const swaggerDocument = {
                 required: ['amount'],
                 properties: {
                   amount: { type: 'number', example: 5000 },
-                  description: { type: 'string', example: 'Retrait DAB' },
+                  description: { type: 'string', example: 'Retrait' },
                 },
               },
             },
@@ -126,15 +126,18 @@ const nextAccountNumber = () => `BK-${Date.now().toString().slice(-4)}${String(c
 
 // ── ROUTES COMPTES ──────────────────────────────────
 
-// Créer un compte
 app.post('/api/accounts', (req, res) => {
   const { owner, email, type, initialDeposit } = req.body;
+  const deposit = Number(initialDeposit) || 0;
 
   if (!owner || !type) {
     return res.status(400).json({ error: 'owner et type sont requis' });
   }
   if (!['courant', 'epargne'].includes(type)) {
     return res.status(400).json({ error: 'type doit être courant ou epargne' });
+  }
+  if (deposit < 0) {
+    return res.status(400).json({ error: 'Le dépôt initial ne peut pas être négatif' });
   }
 
   const account = {
@@ -143,7 +146,7 @@ app.post('/api/accounts', (req, res) => {
     owner,
     email: email || null,
     type,
-    balance: initialDeposit || 0,
+    balance: parseFloat(deposit.toFixed(2)),
     currency: 'FCFA',
     status: 'actif',
     createdAt: new Date().toISOString(),
@@ -153,21 +156,19 @@ app.post('/api/accounts', (req, res) => {
   return res.status(201).json(account);
 });
 
-// Lister tous les comptes
 app.get('/api/accounts', (req, res) => {
   return res.json(Array.from(accounts.values()));
 });
 
 // ── ROUTES TRANSACTIONS ─────────────────────────────
 
-// Dépôt
 app.post('/api/accounts/:id/deposit', (req, res) => {
   const account = accounts.get(req.params.id);
   if (!account) return res.status(404).json({ error: 'Compte non trouvé' });
 
-  const { amount, description } = req.body;
-  if (!amount || amount <= 0) {
-    return res.status(400).json({ error: 'amount doit être > 0' });
+  const amount = Number(req.body.amount);
+  if (isNaN(amount) || amount <= 0) {
+    return res.status(400).json({ error: 'Le montant doit être un nombre supérieur à 0' });
   }
 
   const balanceBefore = account.balance;
@@ -180,24 +181,23 @@ app.post('/api/accounts/:id/deposit', (req, res) => {
     amount,
     balanceBefore,
     balanceAfter: account.balance,
-    description: description || 'Dépôt',
+    description: req.body.description || 'Dépôt',
     date: new Date().toISOString(),
   };
   transactions.set(tx.id, tx);
   return res.json(tx);
 });
 
-// Retrait
 app.post('/api/accounts/:id/withdraw', (req, res) => {
   const account = accounts.get(req.params.id);
   if (!account) return res.status(404).json({ error: 'Compte non trouvé' });
 
-  const { amount, description } = req.body;
-  if (!amount || amount <= 0) {
-    return res.status(400).json({ error: 'amount doit être > 0' });
+  const amount = Number(req.body.amount);
+  if (isNaN(amount) || amount <= 0) {
+    return res.status(400).json({ error: 'Le montant doit être un nombre supérieur à 0' });
   }
   if (account.balance < amount) {
-    return res.status(400).json({ error: `Solde insuffisant. Solde actuel : ${account.balance} FCFA` });
+    return res.status(400).json({ error: `Solde insuffisant (${account.balance} FCFA)` });
   }
 
   const balanceBefore = account.balance;
@@ -210,18 +210,16 @@ app.post('/api/accounts/:id/withdraw', (req, res) => {
     amount,
     balanceBefore,
     balanceAfter: account.balance,
-    description: description || 'Retrait',
+    description: req.body.description || 'Retrait',
     date: new Date().toISOString(),
   };
   transactions.set(tx.id, tx);
   return res.json(tx);
 });
 
-// Page d'accueil → redirige vers Swagger
 app.get('/', (req, res) => res.redirect('/api-docs'));
 
-// ── Démarrage du serveur ────────────────────────────
 app.listen(PORT, () => {
-  console.log(`✅ Serveur démarré sur http://localhost:${PORT}`);
+  console.log(`✅ Serveur de Tassolimo Zita démarré sur http://localhost:${PORT}`);
   console.log(`📖 Swagger UI : http://localhost:${PORT}/api-docs`);
 });
